@@ -1,0 +1,32 @@
+# 配置数据库的链接信息
+spring:
+  application:
+    name: tlias-web-management
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/tlias
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: 123456
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 100MB
+
+mybatis:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true
+
+pagehelper:
+   reasonable: true
+   helper-dialect: mysql
+
+
+#spring事务管理日志
+logging:
+   level:
+    org.springframework.jdbc.support.JdbcTransactionManager: debug
+
+
