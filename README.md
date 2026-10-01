@@ -2,6 +2,8 @@
 
 黑马程序员（itheima）JavaWeb 课程项目 —— tlias 智能学习辅助系统中**员工管理模块的后端服务**，纯 REST API 项目，无前端页面（仓库内 `upload.html` 仅用于文件上传接口的手动测试）。
 
+> 当前版本：**v0.2**（更新日志见文末）
+
 > ⚠️ 说明：仓库名为 Java-Web-Redis，但本项目实际是员工管理系统，**当前代码中不包含 Redis 或 AI 相关功能**。
 
 ## 技术栈
@@ -176,3 +178,16 @@ tlias-web-management/
 - OSS 的 endpoint/bucket/region 硬编码在 Java 代码中，未提取到配置文件
 - 全局异常处理器为 catch-all 简单实现：所有异常统一返回「操作失败」，异常堆栈仅打印到控制台
 - 不包含 Redis / AI 相关代码（与仓库名不符，见文首说明）
+
+## 更新日志
+
+### v0.2（2026-10-01）
+
+- **文件上传切换至阿里云 OSS**：新增 `AliyunOSSOperator` 封装（`alibabacloud-oss-v2 0.6.0`），对象名按 `yyyy/MM/uuid.后缀` 组织，上传成功返回文件访问 URL；凭据通过环境变量 `ALIBABA_CLOUD_ACCESS_KEY_ID` / `ALIBABA_CLOUD_ACCESS_KEY_SECRET` 提供，代码不含密钥；旧本地存盘实现注释保留
+- **员工查询回显与修改**：新增 `GET /emps/{id}`（含工作经历，resultMap 一对多映射）与 `PUT /emps`（基本信息 + 工作经历重写）
+- **全局异常处理器**：新增 `GlobalExceptionHandler`（`@RestControllerAdvice`），统一返回 `Result.error`
+- 新增 OSS 演示类 `Demo.java`、`Example.java`
+
+### v0.1（2026-09-30）
+
+- 初始版本：部门管理（增删改查）、员工分页条件查询/新增/批量删除、本地磁盘文件上传、事务与审计日志（`REQUIRES_NEW`）、统一响应 `Result`
