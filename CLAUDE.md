@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 环境要求：JDK 21（pom.xml 中 `java.version=21`）。Maven 使用项目自带 wrapper，无需全局安装。
 - 启动：Windows `mvnw.cmd spring-boot:run`；Unix `./mvnw spring-boot:run`（首次运行 wrapper 会自动下载 Maven）。
 - 测试：`mvnw.cmd test`（测试在 `src/test/java/com/itheima/`，目前仅冒烟级）。
-- 依赖数据库：MySQL `localhost:3306/tlias`，表 `dept`/`emp`/`emp_expr`/`emp_log`。**仓库不含建表 SQL**，字段以 `pojo/` 下的实体类为准。
+- 依赖数据库：MySQL `localhost:3306/tlias`，表 `dept`/`emp`/`emp_expr`/`emp_log`/`clazz`/`student`。**仓库不含建表 SQL**，字段以 `pojo/` 下的实体类为准。
 - 服务端口：8080（Spring Boot 默认，未配置 server.port）。
 - 运行前提（文件上传）：需先设置环境变量 `ALIBABA_CLOUD_ACCESS_KEY_ID` / `ALIBABA_CLOUD_ACCESS_KEY_SECRET`（阿里云 OSS 凭据，`AliyunOSSOperator` 用 `EnvironmentVariableCredentialsProvider` 读取），否则 `/upload` 抛异常。**密钥严禁写入代码/配置文件，只能走环境变量。**
 
@@ -19,10 +19,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 分层为 Controller → Service 接口 → ServiceImpl → Mapper（接口），Mapper XML 位于 `src/main/resources/com/itheima/mapper/`。新增模块按此模板复制。
 
-- `controller/`：DeptController（/depts）、EmpController（/emps，含查询回显 GET /emps/{id} 与修改 PUT /emps）、UploadController（/upload，已改为上传阿里云 OSS）。控制器只做参数接收与日志，业务全在 Service。
+- `controller/`：DeptController（/depts）、EmpController（/emps，含查询回显 GET /emps/{id} 与修改 PUT /emps）、ClazzController（/clazzs，班级条件分页查询）、ReportController（/report，员工报表统计）、UploadController（/upload，已改为上传阿里云 OSS）。控制器只做参数接收与日志，业务全在 Service。
 - `utils/`：AliyunOSSOperator——OSS 上传封装，endpoint/bucket/region 硬编码在类字段中（换账号需改）。
 - `exception/`：GlobalExceptionHandler——`@RestControllerAdvice` catch-all，统一返回 Result.error。
-- `pojo/`：实体（Dept/Emp/EmpExpr/EmpLog）、查询参数 EmpQueryParam、分页封装 PageResult、统一响应 Result。
+- `pojo/`：实体（Dept/Emp/EmpExpr/EmpLog/Clazz/Student）、查询参数 EmpQueryParam、报表封装 JobOption（jobList/dataList，供 ECharts 饼图）、分页封装 PageResult、统一响应 Result。Clazz 含联查字段 masterName（班主任姓名）与 status（SQL CASE 计算的开班状态）；Student 暂无接口引用。
 - 课程教学代码：controller/service 中保留大量注释掉的旧版迭代，属正常现象，勿删除。
 
 ## 关键约定与模式（修改代码前必读）
@@ -37,6 +37,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 8. **员工修改（三步流程，注意）**：`EmpServiceImpl.update` 依次执行：更新基本信息（`updateById` 动态 `<set>`）→ 按 empId 删除旧工作经历 → 批量插入新经历。**该方法未加 `@Transactional`，三步非原子**；教学代码保持现状，如参照 `save` 补事务需先与课程进度确认。
 9. **OSS 上传**：凭据只允许通过环境变量读取（`EnvironmentVariableCredentialsProvider`），不要把密钥写进代码或配置文件；OSS 客户端用 try-with-resources 创建。
 10. **全局异常**：GlobalExceptionHandler 拦截所有异常，统一返回 `Result.error("对不起，操作失败，请联系管理员")`，堆栈仅 `printStackTrace`。
+11. **班级分页查询**：沿用 PageHelper 模板（参照 `ClazzServiceImpl.page`）；`ClazzMapper.list` 用 SQL `CASE` 计算 status（未开班/在读中/已结课）并 left join emp 取班主任姓名——状态列在 SQL 计算而非 Java 计算。
+12. **报表聚合**：`EmpMapper` 的 countEmpJobData/countEmpGenderData 用 `group by` + `CASE` 转中文标签，返回 `List<Map>`/`JobOption` 供 ECharts 饼图；`@MapKey` 标注在返回 List 的方法上无效（课程遗留，勿效仿）。
 
 ## 本机环境陷阱（换机器先改这些）
 
@@ -55,6 +57,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 全局异常处理器为 catch-all 简单实现：统一返回「操作失败」，堆栈仅 printStackTrace，无分类型错误码。
 - `EmpServiceImpl.update` 未加 `@Transactional`（三步操作非原子）。
 - OSS 配置硬编码在 `AliyunOSSOperator` 类字段中，未提取到配置文件。
+- `ClazzMapper.xml` 含孤儿 `update` 模板（`ClazzMapper` 接口无对应方法，未接线）。
+- Report 接口返回原始 `List<Map>`/`JobOption` 原始类型，无类型安全。
+- `Student` 实体已建但无接口引用（后续课程预备）。
 - 无 Redis、无 AI 相关代码——**仓库名 Java-Web-Redis 与实际内容不符，勿据此添加无关依赖**。
 - 测试薄弱：仅冒烟级 JUnit 类，`Demo.java`/`Example.java` 为 main 方法演示类（非测试）；改完代码需手动验证。
 

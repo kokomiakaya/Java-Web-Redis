@@ -2,7 +2,7 @@
 
 黑马程序员（itheima）JavaWeb 课程项目 —— tlias 智能学习辅助系统中**员工管理模块的后端服务**，纯 REST API 项目，无前端页面（仓库内 `upload.html` 仅用于文件上传接口的手动测试）。
 
-> 当前版本：**v0.2**（更新日志见文末）
+> 当前版本：**v0.3**（更新日志见文末）
 
 > ⚠️ 说明：仓库名为 Java-Web-Redis，但本项目实际是员工管理系统，**当前代码中不包含 Redis 或 AI 相关功能**。
 
@@ -23,6 +23,8 @@
 
 - **部门管理**：查询全部、按 ID 查询、新增、修改、删除
 - **员工管理**：分页查询（默认第 1 页 / 每页 10 条）、按姓名/性别/入职日期区间筛选、新增员工（含工作经历批量保存）、按 ID 查询详情回显（含工作经历）、修改员工（基本信息 + 工作经历重写）、批量删除（连带删除工作经历）
+- **班级管理**：条件分页查询（按名称模糊 / 开班日期区间筛选），返回班主任姓名与开班状态（未开班/在读中/已结课）
+- **报表统计**：员工职位分布统计、员工性别分布统计（ECharts 饼图数据格式）
 - **事务与审计**：员工写操作记入 `emp_log` 审计表；日志写入使用 `REQUIRES_NEW` 独立事务，业务回滚时审计记录仍然保留
 - **文件上传（阿里云 OSS）**：multipart 上传至阿里云 OSS，对象名按 `yyyy/MM/uuid.后缀` 组织，上传成功返回文件访问 URL
 - **统一响应**：所有接口返回 `{code, msg, data}`，`code=1` 表示成功
@@ -42,6 +44,9 @@
 | POST | `/emps` | body: Emp JSON | 新增员工（可含工作经历列表 exprList） |
 | PUT | `/emps` | body: Emp JSON（含 exprList） | 修改员工（基本信息 + 工作经历重写） |
 | DELETE | `/emps?ids=1,2,3` | 查询参数 ids | 批量删除员工 |
+| GET | `/clazzs` | name、begin、end、page、pageSize | 班级条件分页查询（名称模糊、开班日期区间，含班主任姓名与开班状态） |
+| GET | `/report/empJobData` | - | 员工职位分布统计（ECharts 饼图数据） |
+| GET | `/report/empGenderData` | - | 员工性别分布统计（ECharts 饼图数据） |
 | POST | `/upload` | form-data：file | 上传文件至阿里云 OSS，成功返回 `data = 文件访问 URL` |
 
 响应示例（分页查询）：
@@ -82,6 +87,8 @@
 | emp | id、username、password、name、gender（1男/2女）、phone、job（1班主任/2讲师/3学工主管/4教研主管/5咨询师）、salary、image、entry_date、dept_id、create_time、update_time |
 | emp_expr（工作经历） | id、emp_id、begin、end、company、job（职位名） |
 | emp_log（操作审计） | id、operate_time、info |
+| clazz（班级） | id、name、room、begin_date、end_date、master_id、subject、create_time、update_time（查询结果中的 master_name 班主任姓名、status 开班状态为 SQL 计算列） |
+| student（学员） | id、name、no、gender、phone、id_card、is_college、address、degree、graduation_date、clazz_id、violation_count、violation_score、create_time、update_time（实体已建，当前无接口使用） |
 
 ## 快速开始
 
@@ -180,6 +187,12 @@ tlias-web-management/
 - 不包含 Redis / AI 相关代码（与仓库名不符，见文首说明）
 
 ## 更新日志
+
+### v0.3（2026-10-01）
+
+- **班级管理**：新增 `GET /clazzs` 条件分页查询（名称模糊、开班日期区间筛选），SQL 联查班主任姓名并用 CASE 计算开班状态（未开班/在读中/已结课）
+- **报表统计**：新增 `GET /report/empJobData`（职位分布）与 `GET /report/empGenderData`（性别分布），输出 ECharts 饼图数据格式
+- **学员实体**：新增 `Student` 实体（暂无接口使用，后续课程预备）
 
 ### v0.2（2026-10-01）
 
