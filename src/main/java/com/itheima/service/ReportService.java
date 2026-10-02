@@ -1,5 +1,6 @@
 package com.itheima.service;
 
+import com.itheima.pojo.ClazzCountOption;
 import com.itheima.pojo.JobOption;
 
 import java.util.List;
@@ -11,4 +12,14 @@ public interface ReportService {
 
     // 统计员工性别
     List<Map> getEmpGenderData();
+
+    /**
+     * 统计学历人数
+     */
+    List<Map> getStudentDegreeData();
+
+    /**
+     * 统计班级人数
+     */
+    ClazzCountOption getStudentCountData();
 }

@@ -149,4 +149,15 @@ public class EmpServiceImpl implements EmpService {
         }
     }
 
+    // 登录校验功能
+    @Override
+    public LoginInfo login(Emp emp) {
+        Emp empLogin = empMapper.getUsernameAndPassword(emp);
+        if(empLogin != null){
+            LoginInfo loginInfo = new LoginInfo(empLogin.getId(), empLogin.getUsername(), empLogin.getName(), null);
+            return loginInfo;
+        }
+        return null;
+    }
+
 }

@@ -1,16 +1,15 @@
 package com.itheima.controller;
 
+import com.itheima.pojo.Clazz;
 import com.itheima.pojo.PageResult;
 import com.itheima.pojo.Result;
 import com.itheima.service.ClazzService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @RestController
 @RequestMapping("/clazzs")
@@ -28,5 +27,41 @@ public class ClazzController {
         PageResult pageResult = clazzService.page(name,begin,end,page,pageSize);
         return Result.success(pageResult);
     }
+
+    // 查询所有班级
+    @GetMapping("/list")
+    public Result findAll(){
+        List<Clazz> claszzList = clazzService.findAll();
+        return Result.success(claszzList);
+    }
+
+    // 新增班级
+    @PostMapping
+    public Result save(@RequestBody Clazz clazz){
+        clazzService.save(clazz);
+        return Result.success();
+    }
+
+    // 根据ID查询班级
+    @GetMapping("/{id}")
+    public Result getInfo(@PathVariable Integer id){
+        Clazz clazz = clazzService.getInfo(id);
+        return Result.success(clazz);
+    }
+
+    // 修改班级信息
+    @PutMapping
+    public Result update(@RequestBody Clazz clazz){
+        clazzService.update(clazz);
+        return Result.success();
+    }
+
+    // 删除班级
+    @DeleteMapping("/{id}")
+    public Result delete(@PathVariable Integer id){
+        clazzService.deleteById(id);
+        return Result.success();
+    }
+
 
 }
