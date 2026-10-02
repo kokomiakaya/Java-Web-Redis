@@ -19,10 +19,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 分层为 Controller → Service 接口 → ServiceImpl → Mapper（接口），Mapper XML 位于 `src/main/resources/com/itheima/mapper/`。新增模块按此模板复制。
 
-- `controller/`：DeptController（/depts）、EmpController（/emps，含查询回显 GET /emps/{id} 与修改 PUT /emps）、ClazzController（/clazzs，班级条件分页查询）、ReportController（/report，员工报表统计）、UploadController（/upload，已改为上传阿里云 OSS）。控制器只做参数接收与日志，业务全在 Service。
+- `controller/`：DeptController（/depts）、EmpController（/emps，含查询回显与修改）、LoginController（/login，员工登录）、ClazzController（/clazzs，班级分页查询 + 增删改查）、StudentController（/students，学员 CRUD + 违纪扣分）、ReportController（/report，员工/学员报表统计）、UploadController（/upload，阿里云 OSS）、SessionController（/c1 /c2 /s1 /s2，Cookie/Session 教学演示）。控制器只做参数接收与日志，业务全在 Service。
 - `utils/`：AliyunOSSOperator——OSS 上传封装，endpoint/bucket/region 硬编码在类字段中（换账号需改）。
-- `exception/`：GlobalExceptionHandler——`@RestControllerAdvice` catch-all，统一返回 Result.error。
-- `pojo/`：实体（Dept/Emp/EmpExpr/EmpLog/Clazz/Student）、查询参数 EmpQueryParam、报表封装 JobOption（jobList/dataList，供 ECharts 饼图）、分页封装 PageResult、统一响应 Result。Clazz 含联查字段 masterName（班主任姓名）与 status（SQL CASE 计算的开班状态）；Student 暂无接口引用。
+- `exception/`：GlobalExceptionHandler——`@RestControllerAdvice` catch-all，统一返回 `Result.error(e.getMessage())`（消息透传）；BusinessException——自定义业务异常（班级删除保护用）。
+- `pojo/`：实体（Dept/Emp/EmpExpr/EmpLog/Clazz/Student）、查询参数 EmpQueryParam、报表封装 JobOption / ClazzCountOption（jobList/dataList、clazzList/dataList，原始 List 类型，供 ECharts）、登录返回 LoginInfo（id/username/name/token，token 恒为 null）、分页封装 PageResult、统一响应 Result。Clazz 含联查字段 masterName（班主任姓名）与 status（SQL CASE 计算的开班状态）；Student 含联查字段 clazzName。
 - 课程教学代码：controller/service 中保留大量注释掉的旧版迭代，属正常现象，勿删除。
 
 ## 关键约定与模式（修改代码前必读）
@@ -39,6 +39,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 10. **全局异常**：GlobalExceptionHandler 拦截所有异常，统一返回 `Result.error("对不起，操作失败，请联系管理员")`，堆栈仅 `printStackTrace`。
 11. **班级分页查询**：沿用 PageHelper 模板（参照 `ClazzServiceImpl.page`）；`ClazzMapper.list` 用 SQL `CASE` 计算 status（未开班/在读中/已结课）并 left join emp 取班主任姓名——状态列在 SQL 计算而非 Java 计算。
 12. **报表聚合**：`EmpMapper` 的 countEmpJobData/countEmpGenderData 用 `group by` + `CASE` 转中文标签，返回 `List<Map>`/`JobOption` 供 ECharts 饼图；`@MapKey` 标注在返回 List 的方法上无效（课程遗留，勿效仿）。
+13. **删除保护**：删除班级前先 `studentMapper.countByClazzId(id)` 校验，有学员则抛 `BusinessException`，由全局异常处理器把消息透传给前端——新增「有关联数据的删除」按此模式。
+14. **违纪扣分**：用单条 UPDATE 原子累加（`violation_count = violation_count + 1, violation_score = violation_score + #{score}`），勿用「读-改-写」。
+15. **登录**：仅做用户名密码校验返回 `LoginInfo`，**token 恒为 null（JWT/会话未实现）**，不要假设接口有鉴权。
 
 ## 本机环境陷阱（换机器先改这些）
 
@@ -53,13 +56,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 现状与缺口
 
-- 无登录鉴权/权限控制。
-- 全局异常处理器为 catch-all 简单实现：统一返回「操作失败」，堆栈仅 printStackTrace，无分类型错误码。
+- 无登录鉴权/权限控制：`/login` 仅校验用户名密码，token/会话未实现（`LoginInfo.token` 恒为 null）。
+- 全局异常处理器为 catch-all：透传 `e.getMessage()`（无消息的异常如 NPE 会返回 null msg），堆栈仅 printStackTrace，无分类型错误码。
 - `EmpServiceImpl.update` 未加 `@Transactional`（三步操作非原子）。
 - OSS 配置硬编码在 `AliyunOSSOperator` 类字段中，未提取到配置文件。
-- `ClazzMapper.xml` 含孤儿 `update` 模板（`ClazzMapper` 接口无对应方法，未接线）。
-- Report 接口返回原始 `List<Map>`/`JobOption` 原始类型，无类型安全。
-- `Student` 实体已建但无接口引用（后续课程预备）。
+- `ClazzMapper.xml` 的 `update` 模板已在 v0.4 接线（绑定 `ClazzMapper.update`）。
+- `StudentMapper.xml` 的 insertBatch 无接口方法调用（孤儿语句）。
+- Report 接口返回原始 `List<Map>`/`JobOption`/`ClazzCountOption` 原始类型，无类型安全。
+- 多处 unused import（课程模板遗留，勿效仿）：StudentController 的 lombok.Data、StudentMapper 的 Service、ClazzMapper 的 DeleteMapping 等。
 - 无 Redis、无 AI 相关代码——**仓库名 Java-Web-Redis 与实际内容不符，勿据此添加无关依赖**。
 - 测试薄弱：仅冒烟级 JUnit 类，`Demo.java`/`Example.java` 为 main 方法演示类（非测试）；改完代码需手动验证。
 

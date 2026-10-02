@@ -2,7 +2,7 @@
 
 黑马程序员（itheima）JavaWeb 课程项目 —— tlias 智能学习辅助系统中**员工管理模块的后端服务**，纯 REST API 项目，无前端页面（仓库内 `upload.html` 仅用于文件上传接口的手动测试）。
 
-> 当前版本：**v0.3**（更新日志见文末）
+> 当前版本：**v0.4**（更新日志见文末）
 
 > ⚠️ 说明：仓库名为 Java-Web-Redis，但本项目实际是员工管理系统，**当前代码中不包含 Redis 或 AI 相关功能**。
 
@@ -23,8 +23,10 @@
 
 - **部门管理**：查询全部、按 ID 查询、新增、修改、删除
 - **员工管理**：分页查询（默认第 1 页 / 每页 10 条）、按姓名/性别/入职日期区间筛选、新增员工（含工作经历批量保存）、按 ID 查询详情回显（含工作经历）、修改员工（基本信息 + 工作经历重写）、批量删除（连带删除工作经历）
-- **班级管理**：条件分页查询（按名称模糊 / 开班日期区间筛选），返回班主任姓名与开班状态（未开班/在读中/已结课）
-- **报表统计**：员工职位分布统计、员工性别分布统计（ECharts 饼图数据格式）
+- **班级管理**：条件分页查询（按名称模糊 / 开班日期区间筛选，返回班主任姓名与开班状态）、全部查询、新增、详情、修改、删除（删除保护：班下有学员时拒绝删除）
+- **学员管理**：分页条件查询（姓名/学历/班级筛选）、详情、新增、修改、批量删除、违纪扣分（违纪次数与扣分自动累计）
+- **登录认证**：员工用户名密码校验（`POST /login`），返回 `LoginInfo`（token 暂未实现）
+- **报表统计**：员工职位/性别分布、学员学历分布、班级学员人数统计（ECharts 饼图/柱状图数据格式）
 - **事务与审计**：员工写操作记入 `emp_log` 审计表；日志写入使用 `REQUIRES_NEW` 独立事务，业务回滚时审计记录仍然保留
 - **文件上传（阿里云 OSS）**：multipart 上传至阿里云 OSS，对象名按 `yyyy/MM/uuid.后缀` 组织，上传成功返回文件访问 URL
 - **统一响应**：所有接口返回 `{code, msg, data}`，`code=1` 表示成功
@@ -34,6 +36,7 @@
 
 | 方法 | 路径 | 参数 | 说明 |
 |---|---|---|---|
+| POST | `/login` | body: Emp JSON（username、password） | 员工登录（用户名密码校验，返回 LoginInfo） |
 | GET | `/depts` | - | 查询所有部门 |
 | GET | `/depts/{id}` | 路径参数 id | 按 ID 查询部门 |
 | POST | `/depts` | body: Dept JSON | 新增部门 |
@@ -45,9 +48,31 @@
 | PUT | `/emps` | body: Emp JSON（含 exprList） | 修改员工（基本信息 + 工作经历重写） |
 | DELETE | `/emps?ids=1,2,3` | 查询参数 ids | 批量删除员工 |
 | GET | `/clazzs` | name、begin、end、page、pageSize | 班级条件分页查询（名称模糊、开班日期区间，含班主任姓名与开班状态） |
+| GET | `/clazzs/list` | - | 查询全部班级 |
+| POST | `/clazzs` | body: Clazz JSON | 新增班级 |
+| GET | `/clazzs/{id}` | 路径参数 id | 按 ID 查询班级 |
+| PUT | `/clazzs` | body: Clazz JSON | 修改班级 |
+| DELETE | `/clazzs/{id}` | 路径参数 id | 删除班级（班下有学员时返回业务异常） |
+| GET | `/students` | name、degree、clazzId、page、pageSize | 学员分页 + 条件查询（姓名/学历/班级筛选） |
+| GET | `/students/{id}` | 路径参数 id | 按 ID 查询学员详情 |
+| POST | `/students` | body: Student JSON | 新增学员 |
+| PUT | `/students` | body: Student JSON | 修改学员 |
+| DELETE | `/students/{ids}` | 路径参数 ids | 批量删除学员 |
+| PUT | `/students/violation/{id}/{score}` | 路径参数 id、score | 违纪扣分（违纪次数 +1、扣分累计） |
 | GET | `/report/empJobData` | - | 员工职位分布统计（ECharts 饼图数据） |
 | GET | `/report/empGenderData` | - | 员工性别分布统计（ECharts 饼图数据） |
+| GET | `/report/studentDegreeData` | - | 学员学历分布统计（ECharts 饼图数据） |
+| GET | `/report/studentCountData` | - | 班级学员人数统计（ECharts 柱状图数据） |
 | POST | `/upload` | form-data：file | 上传文件至阿里云 OSS，成功返回 `data = 文件访问 URL` |
+
+Cookie/Session 教学演示接口（无业务含义，用于演示请求与会话状态）：
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/c1` | 设置 Cookie（login_username=itheima） |
+| GET | `/c2` | 读取 Cookie |
+| GET | `/s1` | 创建 Session 并保存 loginUser |
+| GET | `/s2` | 读取 Session 中的 loginUser |
 
 响应示例（分页查询）：
 
@@ -88,7 +113,7 @@
 | emp_expr（工作经历） | id、emp_id、begin、end、company、job（职位名） |
 | emp_log（操作审计） | id、operate_time、info |
 | clazz（班级） | id、name、room、begin_date、end_date、master_id、subject、create_time、update_time（查询结果中的 master_name 班主任姓名、status 开班状态为 SQL 计算列） |
-| student（学员） | id、name、no、gender、phone、id_card、is_college、address、degree、graduation_date、clazz_id、violation_count、violation_score、create_time、update_time（实体已建，当前无接口使用） |
+| student（学员） | id、name、no、gender、phone、id_card、is_college、address、degree、graduation_date、clazz_id、violation_count、violation_score、create_time、update_time（查询结果中的 clazz_name 班级名称来自联查 clazz 表） |
 
 ## 快速开始
 
@@ -179,14 +204,23 @@ tlias-web-management/
 
 ## 已知限制
 
-- 无登录鉴权/权限控制，接口全部开放，仅用于课程学习
+- 无登录鉴权/权限控制，接口全部开放：`/login` 仅做用户名密码校验，**未实现 token/会话**（`LoginInfo.token` 恒为 null），登录后不维护登录态，仅用于课程学习
 - 数据库密码明文写在 `application.yml` 中
 - `EmpServiceImpl.update` 修改员工的三步操作（更新基本信息 → 删除工作经历 → 重新插入）**未加 `@Transactional`**，中途失败会留下部分数据（非原子）
 - OSS 的 endpoint/bucket/region 硬编码在 Java 代码中，未提取到配置文件
-- 全局异常处理器为 catch-all 简单实现：所有异常统一返回「操作失败」，异常堆栈仅打印到控制台
+- 全局异常处理器为 catch-all 简单实现：透传 `e.getMessage()`，异常无消息时响应 msg 为 null；堆栈仅打印到控制台
 - 不包含 Redis / AI 相关代码（与仓库名不符，见文首说明）
 
 ## 更新日志
+
+### v0.4（2026-10-02）
+
+- **员工登录**：新增 `POST /login` 用户名密码校验，返回 `LoginInfo`（token 暂未实现）
+- **班级管理补全**：新增全部查询、详情、新增、修改、删除接口；删除前校验班下学员数，有学员时抛业务异常拒绝删除
+- **学员管理**：新增 `GET/POST/PUT/DELETE /students` 全套接口（分页条件查询、批量删除）与 `PUT /students/violation/{id}/{score}` 违纪扣分
+- **报表扩展**：新增 `GET /report/studentDegreeData`（学员学历分布）、`GET /report/studentCountData`（班级学员人数）
+- **Cookie/Session 教学演示**：新增 `/c1`、`/c2`（Cookie 读写）与 `/s1`、`/s2`（Session 存取）
+- **异常处理**：新增自定义业务异常 `BusinessException`；全局异常消息由固定文案改为透传异常内容
 
 ### v0.3（2026-10-01）
 
