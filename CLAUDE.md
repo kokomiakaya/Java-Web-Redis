@@ -20,7 +20,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 分层为 Controller → Service 接口 → ServiceImpl → Mapper（接口），Mapper XML 位于 `src/main/resources/com/itheima/mapper/`。新增模块按此模板复制。
 
 - `controller/`：DeptController（/depts）、EmpController（/emps，含查询回显与修改）、LoginController（/login，员工登录）、ClazzController（/clazzs，班级分页查询 + 增删改查）、StudentController（/students，学员 CRUD + 违纪扣分）、ReportController（/report，员工/学员报表统计）、UploadController（/upload，阿里云 OSS）、SessionController（/c1 /c2 /s1 /s2，Cookie/Session 教学演示）。控制器只做参数接收与日志，业务全在 Service。
-- `utils/`：AliyunOSSOperator——OSS 上传封装，endpoint/bucket/region 硬编码在类字段中（换账号需改）。
+- `utils/`：AliyunOSSOperator——OSS 上传封装，endpoint/bucket/region 硬编码在类字段中（换账号需改）；JwtUtils——JWT 签发/解析（signKey 硬编码，见陷阱）。
+- `config/`：WebConfig——拦截器注册（当前仅注册 DemoInterceptor，拦截 `/**` 排除 /login）。
+- `filter/`：DemoFilter（教学演示，@WebFilter 注释未启用）、TokenFilter（令牌校验：url 含 login 放行，token 空/解析失败回 401；@WebFilter 注释未启用）。
+- `interceptor/`：DemoInterceptor（教学演示，pre/post/after 打日志）、TokenInterceptor（令牌校验 + 额外要求 username 请求参数非空否则回 400；@Component 但未注册进 WebConfig）。启动类已开 @ServletComponentScan。
 - `exception/`：GlobalExceptionHandler——`@RestControllerAdvice` catch-all，统一返回 `Result.error(e.getMessage())`（消息透传）；BusinessException——自定义业务异常（班级删除保护用）。
 - `pojo/`：实体（Dept/Emp/EmpExpr/EmpLog/Clazz/Student）、查询参数 EmpQueryParam、报表封装 JobOption / ClazzCountOption（jobList/dataList、clazzList/dataList，原始 List 类型，供 ECharts）、登录返回 LoginInfo（id/username/name/token，token 恒为 null）、分页封装 PageResult、统一响应 Result。Clazz 含联查字段 masterName（班主任姓名）与 status（SQL CASE 计算的开班状态）；Student 含联查字段 clazzName。
 - 课程教学代码：controller/service 中保留大量注释掉的旧版迭代，属正常现象，勿删除。
@@ -41,7 +44,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 12. **报表聚合**：`EmpMapper` 的 countEmpJobData/countEmpGenderData 用 `group by` + `CASE` 转中文标签，返回 `List<Map>`/`JobOption` 供 ECharts 饼图；`@MapKey` 标注在返回 List 的方法上无效（课程遗留，勿效仿）。
 13. **删除保护**：删除班级前先 `studentMapper.countByClazzId(id)` 校验，有学员则抛 `BusinessException`，由全局异常处理器把消息透传给前端——新增「有关联数据的删除」按此模式。
 14. **违纪扣分**：用单条 UPDATE 原子累加（`violation_count = violation_count + 1, violation_score = violation_score + #{score}`），勿用「读-改-写」。
-15. **登录**：仅做用户名密码校验返回 `LoginInfo`，**token 恒为 null（JWT/会话未实现）**，不要假设接口有鉴权。
+15. **登录与 JWT**：`EmpServiceImpl.login` 校验成功后调用 `JwtUtils.generateJwt` 签发 JWT（HS256、claims 含 id/username、有效期 12 小时），返回含 token 的 LoginInfo；解析用 `JwtUtils.parseJwt`。**注意：TokenFilter/TokenInterceptor 均未启用**（@WebFilter 被注释、WebConfig 只注册了 DemoInterceptor）——接口实际仍无鉴权，不要假设 token 已被校验。
+16. **过滤器 vs 拦截器**：课程给了两套令牌校验实现——TokenFilter（Filter 接口）与 TokenInterceptor（HandlerInterceptor，额外校验 username 参数）。启用方式：Filter 取消 @WebFilter 注释（依赖 @ServletComponentScan，已开）；Interceptor 注册进 WebConfig.addInterceptors。
 
 ## 本机环境陷阱（换机器先改这些）
 
@@ -53,10 +57,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 4. `AliyunOSSOperator` 的 endpoint/bucketName/region 三个硬编码字段（换账号/Bucket 必须改）
 5. `src/test/java/com/itheima/Demo.java` 写死本机文件 `E:\CodeJava\web-ai-project02\images\0f7b82fb...jpg`（仅演示类）
 6. 两个 OSS 环境变量 `ALIBABA_CLOUD_ACCESS_KEY_ID` / `ALIBABA_CLOUD_ACCESS_KEY_SECRET` 必须先设置
+7. `JwtUtils.signKey` 硬编码 `SVRIRUlNQQ==`（base64("itheima")）——教学用，生产必须改外部配置；旧版 jjwt 0.9.1 在 JDK 21 依赖 jaxb-api（pom.xml 已加，勿删）
 
 ## 现状与缺口
 
-- 无登录鉴权/权限控制：`/login` 仅校验用户名密码，token/会话未实现（`LoginInfo.token` 恒为 null）。
+- 无登录鉴权/权限控制：`/login` 已签发 JWT，但令牌校验未启用（TokenFilter 的 @WebFilter 被注释、TokenInterceptor 未注册进 WebConfig）——接口仍全部开放。
 - 全局异常处理器为 catch-all：透传 `e.getMessage()`（无消息的异常如 NPE 会返回 null msg），堆栈仅 printStackTrace，无分类型错误码。
 - `EmpServiceImpl.update` 未加 `@Transactional`（三步操作非原子）。
 - OSS 配置硬编码在 `AliyunOSSOperator` 类字段中，未提取到配置文件。

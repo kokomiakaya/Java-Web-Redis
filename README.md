@@ -2,7 +2,7 @@
 
 黑马程序员（itheima）JavaWeb 课程项目 —— tlias 智能学习辅助系统中**员工管理模块的后端服务**，纯 REST API 项目，无前端页面（仓库内 `upload.html` 仅用于文件上传接口的手动测试）。
 
-> 当前版本：**v0.4**（更新日志见文末）
+> 当前版本：**v0.5**（更新日志见文末）
 
 > ⚠️ 说明：仓库名为 Java-Web-Redis，但本项目实际是员工管理系统，**当前代码中不包含 Redis 或 AI 相关功能**。
 
@@ -16,6 +16,7 @@
 | MySQL | mysql-connector-j |
 | 分页 | PageHelper 1.4.7 |
 | 阿里云 OSS | alibabacloud-oss-v2 0.6.0（文件上传存储） |
+| JWT | jjwt 0.9.1 + jaxb-api 2.3.1（登录令牌签发/解析） |
 | 其他 | Lombok、SLF4J + Logback |
 | 构建 | Maven（自带 wrapper，无需全局安装） |
 
@@ -25,7 +26,8 @@
 - **员工管理**：分页查询（默认第 1 页 / 每页 10 条）、按姓名/性别/入职日期区间筛选、新增员工（含工作经历批量保存）、按 ID 查询详情回显（含工作经历）、修改员工（基本信息 + 工作经历重写）、批量删除（连带删除工作经历）
 - **班级管理**：条件分页查询（按名称模糊 / 开班日期区间筛选，返回班主任姓名与开班状态）、全部查询、新增、详情、修改、删除（删除保护：班下有学员时拒绝删除）
 - **学员管理**：分页条件查询（姓名/学历/班级筛选）、详情、新增、修改、批量删除、违纪扣分（违纪次数与扣分自动累计）
-- **登录认证**：员工用户名密码校验（`POST /login`），返回 `LoginInfo`（token 暂未实现）
+- **登录认证**：员工用户名密码校验（`POST /login`），登录成功后签发 JWT 令牌（HS256，有效期 12 小时，携带 id/username）
+- **过滤器/拦截器**：`DemoFilter`/`DemoInterceptor` 生命周期教学演示；`TokenFilter`/`TokenInterceptor` 令牌校验实现（当前未启用，见已知限制）
 - **报表统计**：员工职位/性别分布、学员学历分布、班级学员人数统计（ECharts 饼图/柱状图数据格式）
 - **事务与审计**：员工写操作记入 `emp_log` 审计表；日志写入使用 `REQUIRES_NEW` 独立事务，业务回滚时审计记录仍然保留
 - **文件上传（阿里云 OSS）**：multipart 上传至阿里云 OSS，对象名按 `yyyy/MM/uuid.后缀` 组织，上传成功返回文件访问 URL
@@ -36,7 +38,7 @@
 
 | 方法 | 路径 | 参数 | 说明 |
 |---|---|---|---|
-| POST | `/login` | body: Emp JSON（username、password） | 员工登录（用户名密码校验，返回 LoginInfo） |
+| POST | `/login` | body: Emp JSON（username、password） | 员工登录（校验成功后签发 JWT，返回含 token 的 LoginInfo） |
 | GET | `/depts` | - | 查询所有部门 |
 | GET | `/depts/{id}` | 路径参数 id | 按 ID 查询部门 |
 | POST | `/depts` | body: Dept JSON | 新增部门 |
@@ -163,6 +165,13 @@ OSS 相关配置**硬编码在** `src/main/java/com/itheima/utils/AliyunOSSOpera
 - **凭据安全**：AccessKey 通过环境变量 `ALIBABA_CLOUD_ACCESS_KEY_ID` / `ALIBABA_CLOUD_ACCESS_KEY_SECRET` 提供（`EnvironmentVariableCredentialsProvider`），**代码和配置中不含密钥**；仓库的 `.gitignore` 也已加入 `.env`、`application-local.yml` 等防护规则，防止密钥文件被误提交
 - 文件存储结构：`Bucket 根目录/yyyy/MM/uuid.后缀`（如 `2026/10/xxxxxxxx-xxxx.jpg`）
 
+### JWT 登录令牌
+
+- 工具类：`src/main/java/com/itheima/utils/JwtUtils.java`
+- 签名算法：HS256；有效期 12 小时（`expire = 43200000L`）
+- ⚠️ **签名密钥硬编码在 `JwtUtils.signKey`（`SVRIRUlNQQ==`，即 "itheima" 的 Base64）——教学用硬编码密钥，生产环境必须改为外部配置/环境变量**
+- 旧版 jjwt 0.9.1 在 JDK 21 下需要 `jaxb-api` 依赖（pom.xml 已添加）
+
 ### ⚠️ 硬编码路径（换机器必须修改）
 
 以下为本机绝对路径，clone 到其他机器后**必须改为本机实际路径**，否则相关功能无法工作：
@@ -188,8 +197,11 @@ tlias-web-management/
     │   │   ├── service/        # 业务接口 + impl/ 实现（事务在 ServiceImpl）
     │   │   ├── mapper/         # MyBatis Mapper 接口
     │   │   ├── pojo/           # Dept、Emp、EmpExpr、EmpLog、EmpQueryParam、PageResult、Result
-    │   │   ├── utils/          # AliyunOSSOperator（阿里云 OSS 上传封装）
-    │   │   └── exception/      # GlobalExceptionHandler（全局异常处理）
+    │   │   ├── utils/          # AliyunOSSOperator（OSS 上传）、JwtUtils（JWT 签发/解析）
+    │   │   ├── config/         # WebConfig（拦截器注册）
+    │   │   ├── filter/         # DemoFilter、TokenFilter（过滤器）
+    │   │   ├── interceptor/    # DemoInterceptor、TokenInterceptor（拦截器）
+    │   │   └── exception/      # GlobalExceptionHandler、BusinessException（全局异常）
     │   └── resources/
     │       ├── application.yml
     │       ├── logback.xml
@@ -198,13 +210,15 @@ tlias-web-management/
     └── test/java/com/itheima/
         ├── TliasWebManagementApplicationTests.java   # 冒烟测试
         ├── LogTest.java        # 日志测试
+        ├── TestJwt.java        # JWT 生成/解析测试
         ├── Demo.java           # OSS 上传演示（main 方法）
         └── Example.java        # OSS 列举 Bucket 演示（main 方法）
 ```
 
 ## 已知限制
 
-- 无登录鉴权/权限控制，接口全部开放：`/login` 仅做用户名密码校验，**未实现 token/会话**（`LoginInfo.token` 恒为 null），登录后不维护登录态，仅用于课程学习
+- 登录已签发 JWT，但**令牌校验尚未启用**：`TokenFilter` 的 `@WebFilter` 被注释、`WebConfig` 只注册了演示用 `DemoInterceptor`（`TokenInterceptor` 未注册）——接口实际仍无鉴权，token 生成后没有任何地方校验，仅用于课程学习
+- JWT 签名密钥硬编码在 `JwtUtils.signKey`（教学用，生产必须改）
 - 数据库密码明文写在 `application.yml` 中
 - `EmpServiceImpl.update` 修改员工的三步操作（更新基本信息 → 删除工作经历 → 重新插入）**未加 `@Transactional`**，中途失败会留下部分数据（非原子）
 - OSS 的 endpoint/bucket/region 硬编码在 Java 代码中，未提取到配置文件
@@ -212,6 +226,13 @@ tlias-web-management/
 - 不包含 Redis / AI 相关代码（与仓库名不符，见文首说明）
 
 ## 更新日志
+
+### v0.5（2026-10-03）
+
+- **JWT 登录令牌**：`POST /login` 校验成功后签发 JWT（HS256，有效期 12 小时，携带 id/username），`LoginInfo.token` 不再为 null
+- **过滤器/拦截器**：新增 `DemoFilter`、`DemoInterceptor` 教学演示组件；新增 `TokenFilter`、`TokenInterceptor` 令牌校验实现（**当前未启用**，见已知限制）
+- **依赖**：+ jjwt 0.9.1、jaxb-api 2.3.1（解决旧版 JJWT 在 JDK 21 下缺 JAXB 类的问题）
+- **测试**：新增 `TestJwt`（JWT 生成/解析测试）
 
 ### v0.4（2026-10-02）
 
