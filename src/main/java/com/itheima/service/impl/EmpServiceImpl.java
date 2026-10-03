@@ -8,6 +8,7 @@ import com.itheima.mapper.EmpMapper;
 import com.itheima.pojo.*;
 import com.itheima.service.EmpLogService;
 import com.itheima.service.EmpService;
+import com.itheima.utils.JwtUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cglib.core.Local;
 import org.springframework.stereotype.Service;
@@ -16,9 +17,7 @@ import org.springframework.util.CollectionUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
+import java.util.*;
 
 // 员工管理
 
@@ -150,11 +149,27 @@ public class EmpServiceImpl implements EmpService {
     }
 
     // 登录校验功能
+//    @Override
+//    public LoginInfo login(Emp emp) {
+//        Emp empLogin = empMapper.getUsernameAndPassword(emp);
+//        if(empLogin != null){
+//            LoginInfo loginInfo = new LoginInfo(empLogin.getId(), empLogin.getUsername(), empLogin.getName(), null);
+//            return loginInfo;
+//        }
+//        return null;
+//    }
+
     @Override
     public LoginInfo login(Emp emp) {
         Emp empLogin = empMapper.getUsernameAndPassword(emp);
         if(empLogin != null){
-            LoginInfo loginInfo = new LoginInfo(empLogin.getId(), empLogin.getUsername(), empLogin.getName(), null);
+            // 1.生成JWT令牌
+            Map<String,Object> dataMap = new HashMap<>();
+            dataMap.put("id",empLogin.getId());
+            dataMap.put("username",empLogin.getUsername());
+
+            String jwt = JwtUtils.generateJwt(dataMap);
+            LoginInfo loginInfo = new LoginInfo(empLogin.getId(), empLogin.getUsername(), empLogin.getName(), jwt);
             return loginInfo;
         }
         return null;

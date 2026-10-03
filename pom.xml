@@ -84,6 +84,21 @@
             <scope>compile</scope>
         </dependency>
 
+        <!-- JWT依赖-->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt</artifactId>
+            <version>0.9.1</version>
+        </dependency>
+
+        <!-- 解决旧版 JJWT 在 JDK 21 下缺少 JAXB 类的问题 -->
+        <dependency>
+            <groupId>javax.xml.bind</groupId>
+            <artifactId>jaxb-api</artifactId>
+            <version>2.3.1</version>
+        </dependency>
+
+
     </dependencies>
 
     <build>
