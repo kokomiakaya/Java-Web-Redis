@@ -1,5 +1,6 @@
 package com.itheima.controller;
 
+import com.itheima.anno.Log;
 import com.itheima.pojo.PageResult;
 import com.itheima.pojo.Result;
 import com.itheima.pojo.Student;
@@ -37,6 +38,7 @@ public class StudentController {
     }
 
     // 新增学员
+    @Log
     @PostMapping
     public Result save(@RequestBody Student student){
         studentService.save(student);
@@ -51,6 +53,7 @@ public class StudentController {
     }
 
     // 删除学员
+    @Log
     @DeleteMapping("/{ids}")
     public Result delete(@PathVariable List<Integer> ids){
         studentService.delete(ids);

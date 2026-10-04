@@ -1,5 +1,6 @@
 package com.itheima.controller;
 
+import com.itheima.anno.Log;
 import com.itheima.pojo.Dept;
 import com.itheima.pojo.Result;
 import com.itheima.service.DeptService;
@@ -47,6 +48,7 @@ public class DeptController {
 
 
     // 新增部门
+    @Log
     @PostMapping
     public Result save(@RequestBody Dept dept){
         log.info("新增部门,dept:{} ",dept);
@@ -55,6 +57,7 @@ public class DeptController {
     }
 
     // /depts/id
+    @Log
     @GetMapping("/{id}")
     public Result getInfo(@PathVariable("id") Integer deptId){
         log.info("根据ID查询,id:{} ",deptId);

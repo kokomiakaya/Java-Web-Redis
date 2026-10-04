@@ -1,5 +1,6 @@
 package com.itheima.controller;
 
+import com.itheima.anno.Log;
 import com.itheima.pojo.Clazz;
 import com.itheima.pojo.PageResult;
 import com.itheima.pojo.Result;
@@ -35,6 +36,7 @@ public class ClazzController {
         return Result.success(claszzList);
     }
 
+    @Log
     // 新增班级
     @PostMapping
     public Result save(@RequestBody Clazz clazz){
