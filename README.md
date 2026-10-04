@@ -2,7 +2,7 @@
 
 黑马程序员（itheima）JavaWeb 课程项目 —— tlias 智能学习辅助系统中**员工管理模块的后端服务**，纯 REST API 项目，无前端页面（仓库内 `upload.html` 仅用于文件上传接口的手动测试）。
 
-> 当前版本：**v0.5**（更新日志见文末）
+> 当前版本：**v1.0（后端完成版）**（更新日志见文末）
 
 > ⚠️ 说明：仓库名为 Java-Web-Redis，但本项目实际是员工管理系统，**当前代码中不包含 Redis 或 AI 相关功能**。
 
@@ -17,6 +17,8 @@
 | 分页 | PageHelper 1.4.7 |
 | 阿里云 OSS | alibabacloud-oss-v2 0.6.0（文件上传存储） |
 | JWT | jjwt 0.9.1 + jaxb-api 2.3.1（登录令牌签发/解析） |
+| Spring AOP | spring-boot-starter-aspectj（操作日志、耗时统计切面） |
+| Actuator | spring-boot-starter-actuator（应用监控端点） |
 | 其他 | Lombok、SLF4J + Logback |
 | 构建 | Maven（自带 wrapper，无需全局安装） |
 
@@ -27,7 +29,9 @@
 - **班级管理**：条件分页查询（按名称模糊 / 开班日期区间筛选，返回班主任姓名与开班状态）、全部查询、新增、详情、修改、删除（删除保护：班下有学员时拒绝删除）
 - **学员管理**：分页条件查询（姓名/学历/班级筛选）、详情、新增、修改、批量删除、违纪扣分（违纪次数与扣分自动累计）
 - **登录认证**：员工用户名密码校验（`POST /login`），登录成功后签发 JWT 令牌（HS256，有效期 12 小时，携带 id/username）
-- **过滤器/拦截器**：`DemoFilter`/`DemoInterceptor` 生命周期教学演示；`TokenFilter`/`TokenInterceptor` 令牌校验实现（当前未启用，见已知限制）
+- **JWT 鉴权（已启用）**：`TokenInterceptor` 拦截除 /login 外的所有请求，校验请求头 token 并解析员工 id 存入 ThreadLocal（`CurrentHolder`）；无效令牌返回 401（`TokenFilter` 过滤器版本保留但未启用）
+- **AOP 操作日志**：标注 `@Log` 的接口自动记录操作人/请求参数/返回值/耗时到 `operate_log` 表（`OperationLogAspect`）
+- **AOP 耗时统计**：`RecordTimeAspect` 统计 Service 层每个方法的执行耗时
 - **报表统计**：员工职位/性别分布、学员学历分布、班级学员人数统计（ECharts 饼图/柱状图数据格式）
 - **事务与审计**：员工写操作记入 `emp_log` 审计表；日志写入使用 `REQUIRES_NEW` 独立事务，业务回滚时审计记录仍然保留
 - **文件上传（阿里云 OSS）**：multipart 上传至阿里云 OSS，对象名按 `yyyy/MM/uuid.后缀` 组织，上传成功返回文件访问 URL
@@ -35,6 +39,10 @@
 - **全局异常处理**：`@RestControllerAdvice` 统一捕获未处理异常并返回 `Result.error`，异常堆栈不再直接暴露给调用方
 
 ## API 端点
+
+> 🔐 鉴权说明：除 `POST /login` 外，所有接口需在请求头携带 `token: <JWT>`（登录接口返回），无效令牌返回 401。
+>
+> 📝 带 `@Log` 标注的接口（POST /clazzs、POST /depts、GET /depts/{id}、POST /students、DELETE /students/{ids}）会自动记录操作日志到 `operate_log` 表。
 
 | 方法 | 路径 | 参数 | 说明 |
 |---|---|---|---|
@@ -114,6 +122,7 @@ Cookie/Session 教学演示接口（无业务含义，用于演示请求与会�
 | emp | id、username、password、name、gender（1男/2女）、phone、job（1班主任/2讲师/3学工主管/4教研主管/5咨询师）、salary、image、entry_date、dept_id、create_time、update_time |
 | emp_expr（工作经历） | id、emp_id、begin、end、company、job（职位名） |
 | emp_log（操作审计） | id、operate_time、info |
+| operate_log（AOP 操作日志） | id、operate_emp_id、operate_time、class_name、method_name、method_params、return_value、cost_time |
 | clazz（班级） | id、name、room、begin_date、end_date、master_id、subject、create_time、update_time（查询结果中的 master_name 班主任姓名、status 开班状态为 SQL 计算列） |
 | student（学员） | id、name、no、gender、phone、id_card、is_college、address、degree、graduation_date、clazz_id、violation_count、violation_score、create_time、update_time（查询结果中的 clazz_name 班级名称来自联查 clazz 表） |
 
@@ -140,8 +149,9 @@ Cookie/Session 教学演示接口（无业务含义，用于演示请求与会�
    - Linux/Mac：`./mvnw spring-boot:run`
    - 或在 IDEA 中直接运行 `TliasWebManagementApplication`
 6. 验证：
-   - 访问 `http://localhost:8080/depts`（默认端口 8080）
-   - 上传测试：`curl -F "file=@图片.jpg" http://localhost:8080/upload`，返回 JSON 中的 `data` 即文件访问 URL
+   - 先登录获取令牌：`curl -X POST http://localhost:8080/login -H "Content-Type: application/json" -d "{\"username\":\"你的账号\",\"password\":\"你的密码\"}"`，返回 JSON 中的 `data.token` 即 JWT
+   - 携带令牌访问接口：`curl http://localhost:8080/depts -H "token: <上一步的JWT>"`（除 /login 外所有接口都需要）
+   - 上传测试：`curl -F "file=@图片.jpg" http://localhost:8080/upload -H "token: <JWT>"`，返回 JSON 中的 `data` 即文件访问 URL
 
 ## 配置说明
 
@@ -197,10 +207,12 @@ tlias-web-management/
     │   │   ├── service/        # 业务接口 + impl/ 实现（事务在 ServiceImpl）
     │   │   ├── mapper/         # MyBatis Mapper 接口
     │   │   ├── pojo/           # Dept、Emp、EmpExpr、EmpLog、EmpQueryParam、PageResult、Result
-    │   │   ├── utils/          # AliyunOSSOperator（OSS 上传）、JwtUtils（JWT 签发/解析）
+    │   │   ├── utils/          # AliyunOSSOperator（OSS）、JwtUtils（JWT）、CurrentHolder（ThreadLocal）
     │   │   ├── config/         # WebConfig（拦截器注册）
-    │   │   ├── filter/         # DemoFilter、TokenFilter（过滤器）
-    │   │   ├── interceptor/    # DemoInterceptor、TokenInterceptor（拦截器）
+    │   │   ├── filter/         # DemoFilter、TokenFilter（过滤器，未启用）
+    │   │   ├── interceptor/    # DemoInterceptor（未启用）、TokenInterceptor（JWT 鉴权，已启用）
+    │   │   ├── anno/           # @Log（操作日志注解）
+    │   │   ├── aop/            # OperationLogAspect、RecordTimeAspect（切面）
     │   │   └── exception/      # GlobalExceptionHandler、BusinessException（全局异常）
     │   └── resources/
     │       ├── application.yml
@@ -217,7 +229,9 @@ tlias-web-management/
 
 ## 已知限制
 
-- 登录已签发 JWT，但**令牌校验尚未启用**：`TokenFilter` 的 `@WebFilter` 被注释、`WebConfig` 只注册了演示用 `DemoInterceptor`（`TokenInterceptor` 未注册）——接口实际仍无鉴权，token 生成后没有任何地方校验，仅用于课程学习
+- 鉴权已启用（`TokenInterceptor` 拦截除 /login 外的所有请求），但实现较简单：无权限分级/角色控制；`TokenFilter` 过滤器版本与 `DemoFilter`/`DemoInterceptor` 演示组件保留未启用
+- `operate_log` 表**无建表 SQL**，需自行建表（字段见数据库章节）；未建表时 @Log 接口正常返回但日志写入会失败
+- `OperationLogAspect` 的 `result.toString()` 在接口返回 null 时会抛 NPE（业务已执行，仅操作日志丢失）
 - JWT 签名密钥硬编码在 `JwtUtils.signKey`（教学用，生产必须改）
 - 数据库密码明文写在 `application.yml` 中
 - `EmpServiceImpl.update` 修改员工的三步操作（更新基本信息 → 删除工作经历 → 重新插入）**未加 `@Transactional`**，中途失败会留下部分数据（非原子）
@@ -226,6 +240,13 @@ tlias-web-management/
 - 不包含 Redis / AI 相关代码（与仓库名不符，见文首说明）
 
 ## 更新日志
+
+### v1.0（2026-10-04）——最终版
+
+- **JWT 鉴权正式启用**：`TokenInterceptor` 注册进 WebConfig，拦截除 `/login` 外所有请求，解析 token 并将员工 id 存入 ThreadLocal（`CurrentHolder`）；无效令牌返回 401
+- **AOP 操作日志**：新增 `@Log` 注解与 `OperationLogAspect` 切面，自动记录操作人/参数/返回值/耗时到 `operate_log` 表（已标注 POST /clazzs、POST /depts、GET /depts/{id}、POST /students、DELETE /students/{ids} 五个接口）
+- **AOP 耗时统计**：新增 `RecordTimeAspect`，统计 Service 层方法执行耗时
+- **依赖**：+ spring-boot-starter-aspectj、spring-boot-starter-actuator
 
 ### v0.5（2026-10-03）
 
